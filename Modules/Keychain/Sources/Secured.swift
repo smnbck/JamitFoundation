@@ -138,8 +138,13 @@ public struct Secured<Value: Codable> {
         }
 
         do {
-            let value = try JSONDecoder().decode(Value.self, from: data)
-            return value
+            if #available(iOS 13.0, *) {
+                return try JSONDecoder().decode(Value.self, from: data)
+            } else {
+                let array = try JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed) as? [Value]
+                // swiftlint:disable:next force_cast
+                return array!.first!
+            }
         } catch {
             throw KeychainError.decodingError(error: error)
         }
@@ -150,7 +155,15 @@ public struct Secured<Value: Codable> {
 
         let encodedData: Data
         do {
-            encodedData = try JSONEncoder().encode(value)
+            if #available(iOS 13.0, *) {
+                encodedData = try JSONEncoder().encode(value)
+            } else {
+                // NOTE: JSONEncoder doesn't support fragments on older iOS versions: https://github.com/apple/swift-corelibs-foundation/issues/4402
+                let object = try JSONSerialization.jsonObject(with: JSONEncoder().encode([value]))
+                // swiftlint:disable:next force_cast
+                let array = object as! [Any]
+                encodedData = try JSONSerialization.data(withJSONObject: array.first!, options: .fragmentsAllowed)
+            }
         } catch {
             throw KeychainError.encodingError(error: error)
         }
